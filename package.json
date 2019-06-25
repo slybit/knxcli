@@ -1,0 +1,16 @@
+{
+  "name": "knxcli",
+  "version": "0.0.1",
+  "description": "Simple command line interface for KNX",
+  "main": "knxcli.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "slybit",
+  "license": "ISC",
+  "dependencies": {
+    "knx": "^2.3.3",
+    "log-driver": "^1.2.7",
+    "yargs": "^13.2.4"
+  }
+}
