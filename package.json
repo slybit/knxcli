@@ -9,7 +9,7 @@
   "author": "slybit",
   "license": "ISC",
   "dependencies": {
-    "knx": "^2.3.3",
+    "knx": "2.3.2",
     "log-driver": "^1.2.7",
     "yargs": "^13.2.4"
   }
