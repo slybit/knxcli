@@ -1,6 +1,6 @@
 'use strict'
 
-const argv = require('yargs');
+const yargs = require('yargs');
 const util = require('util');
 // turn off logs as loading the knx lib generates log we do no want
 let logger = require('log-driver')({ level: false });
@@ -17,6 +17,10 @@ const options = {
 */
 
 
+
+
+
+/*
 // Set cli options
 let args = argv
     // options
@@ -79,82 +83,81 @@ let args = argv
     .usage('Usage: $0')
     .showHelpOnFail(true, "Specify --help for available options")
     .argv
+*/
 
 
-// check sending options
-if (args.ga) {
+const connect = function(command, argv) {
 
-    if (!args.r && !args.data) {
-        logger.error("Nothing to send");
-        process.exit(1);
+    let options = {
+        ipAddr: argv.s,
+        ipPort: argv.p,
+        forceTunneling: argv.t ? true : false,
+        physAddr: '13.15.13',
+        minimumDelay: 10,
     }
 
-    try {
-        DPTLib.resolve(args.dpt);
-    } catch (err) {
-        logger.error("Invalid dpt provided: " + args.dpt);
-        process.exit(1);
-    }
-
-}
-
-
-
-let options = {
-    ipAddr: args.s,
-    ipPort: args.p,
-    forceTunneling: args.t ? true : false,
-    physAddr: '13.15.13',
-    minimumDelay: 10,
-}
-
-let knxConnection = knx.Connection(Object.assign({
-    handlers: {
-        connected: function () {
-            logger.debug('KNX connected, sending message');
-            if (args.read) {
-                readValue();
-            } else {
-                writeValue();
-            }
-        },
-        event: function (evt, src, dest, value) {
-            if (args.listen) logger.info(util.format("event: %s, src: %j, dest: %j, value: %j", evt, src, dest, value));
-        },
-        error: function (msg) {
-            logger.debug('KNX disconnected');
-        },
-        disconnected: function () {
-            logger.debug('KNX disconnected');
+    // check sending options
+    /*
+    if (command === 'write') {
+        try {
+            DPTLib.resolve(args.dpt);
+        } catch (err) {
+            logger.error("Invalid dpt provided: " + args.dpt);
+            process.exit(1);
         }
     }
-}, options))
+    */
+
+    logger.info('Connecting to KNX gateway on ' + argv.s + ":" + argv.port);
+    let knxConnection = knx.Connection(Object.assign({
+        handlers: {
+            connected: function () {
+                logger.debug('KNX connected, sending message');
+                if (command === 'read') {
+                    readValue(knxConnection, argv);
+                } else if (command === 'write') {
+                    writeValue(knxConnection, argv);
+                }
+            },
+            event: function (evt, src, dest, value) {
+                if (command === 'listen') logger.info(util.format("event: %s, src: %j, dest: %j, value: %j", evt, src, dest, value));
+            },
+            error: function (msg) {
+                logger.debug('KNX disconnected');
+            },
+            disconnected: function () {
+                logger.debug('KNX disconnected');
+            }
+        }
+    }, options))
+}
 
 
 
-const writeValue = function () {
+
+const writeValue = function (knxConnection, argv) {
     logger.debug("Writing value");
     setTimeout(function () {
         try {
-            knxConnection.write(args.ga, args.data, args.dpt);
-            if (!args.listen) knxConnection.Disconnect();
+            knxConnection.write(argv.ga, argv.value, argv.dpt);
+            knxConnection.Disconnect();
         } catch (err) {
-            console.log(err);
-            if (!args.listen) knxConnection.Disconnect();
+            console.log(err.message);
+            knxConnection.Disconnect();
         }
     }, 100);
 
 }
 
 
-const readValue = function () {
+const readValue = function (knxConnection, argv) {
     logger.debug("Reading value");
     setTimeout(function () {
         try {
-            knxConnection.read(args.ga, (src, apdu) => {
+            knxConnection.read(argv.ga, (src, apdu) => {
                 try {
                     var response = {};
-                    var dpt = DPTLib.resolve(args.dpt);
+                    var dpt = DPTLib.resolve(argv.dpt);
                     if (dpt.subtype) {
                         response.unit = dpt.subtype.unit;
                     }
@@ -169,14 +172,56 @@ const readValue = function () {
                     payload.raw = true;
                 }
                 console.log(response);
-                if (!args.listen) knxConnection.Disconnect();
+                knxConnection.Disconnect();
             });
         } catch (err) {
-            logger.error(err);
-            if (!args.listen) knxConnection.Disconnect();
+            logger.error(err.message);
+            knxConnection.Disconnect();
         }
     }, 100);
 
 }
+
+
+
+
+yargs
+    .command({
+        command: 'write <ga> <dpt> <value>',
+        desc: 'send a KNX message',
+        handler: (argv) => { connect('write', argv); }
+    })
+    .command({
+        command: 'read <ga> <dpt>',
+        desc: 'read data from KNX group address',
+        handler: (argv) => { connect('read', argv); }
+    })
+    .command({
+        command: 'listen',
+        desc: 'listen to the KNX bus',
+        handler: (argv) => { connect('listen', argv); }
+    })
+    .option('s', {
+        alias: 'server',
+        describe: 'KNX gateway IP/hostname',
+        type: 'string',
+        demandOption: false,
+        default: '127.0.0.1'
+    })
+    .option('p', {
+        alias: 'port',
+        describe: 'KNX gateway port',
+        type: 'string',
+        demandOption: false,
+        default: 3671
+    })
+    .option('t', {
+        alias: 'tunnel',
+        describe: 'Force tunneling mode',
+        type: 'boolean',
+        demandOption: false
+    })
+    .help()
+    .argv
 
 
